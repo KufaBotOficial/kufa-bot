@@ -1,0 +1,64 @@
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys'
+import pino from 'pino'
+
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState('auth')
+  const sock = makeWASocket({
+    logger: pino({ level: 'silent' }),
+    auth: state,
+    printQRInTerminal: true
+  })
+  sock.ev.on('creds.update', saveCreds)
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect } = update
+    if (connection === 'close') {
+      const shouldReconnect = lastDisconnect?.error?.output?.statusCode!== DisconnectReason.loggedOut
+      if (shouldReconnect) startBot()
+    } else if (connection === 'open') {
+      console.log('✅ KUFA BOT DO AMOR ONLINE!')
+    }
+  })
+  sock.ev.on('messages.upsert', async ({ messages }) => {
+    const msg = messages[0]
+    if (!msg.message || msg.key.fromMe) return
+    const texto = (msg.message.conversation || msg.message.extendedTextMessage?.text || '').toLowerCase()
+    const jid = msg.key.remoteJid
+    const nome = msg.pushName || 'amigo'
+
+    if (texto === '.menu' || texto === 'menu') {
+      await sock.sendMessage(jid, { text: `❤️ *BOT VAI DAR NAMORO MZ* ❤️
+
+Olá ${nome}!
+
+*COMANDOS DE AMOR:*
+💘.ship @pessoa - ver compatibilidade
+😘.beijo @pessoa
+❤️.abraco @pessoa
+💍.namoro @pessoa - pedir em namoro
+💔.terminar @pessoa
+😍.cantada - cantada aleatória
+💌.casal - casal do dia
+
+*COMANDOS GERAIS:*
+✨.perfil
+🎲.roleta
+
+Grupo: Vai dar namoro e amizade jovem MZ 🇲🇿` })
+    }
+    else if (texto.startsWith('.ship')) {
+      const pct = Math.floor(Math.random()*101)
+      await sock.sendMessage(jid, { text: `💘 *MÁQUINA DO AMOR* 💘\n\n${nome} ❤️ @pessoa\n\nCompatibilidade: *${pct}%*\n${pct>80?'💍 CASAL PERFEITO! Vão casar!':pct>50?'😍 Tem futuro hein!':'💔 Só amizade mesmo'}` })
+    }
+    else if (texto.startsWith('.beijo')) {
+      await sock.sendMessage(jid, { text: `😘 ${nome} deu um beijão apaixonado! 💋❤️` })
+    }
+    else if (texto.startsWith('.cantada')) {
+      const cantadas = ['Você é WiFi? Porque tô sentindo uma conexão','Seu pai é padeiro? Porque você é um sonho','Me chama de Maputo e me completa']
+      await sock.sendMessage(jid, { text: `😍 *CANTADA:* ${cantadas[Math.floor(Math.random()*cantadas.length)]}` })
+    }
+    else if (texto.startsWith('.casal')) {
+      await sock.sendMessage(jid, { text: `💑 *CASAL DO DIA:* Hoje o casal mais fofo do grupo é @fulano + @fulana! 💍❤️` })
+    }
+  })
+}
+startBot()
